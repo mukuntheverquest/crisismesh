@@ -254,20 +254,28 @@ class FormatDetectorAgent(BaseAgent):
         
         return min(score, 1.0)
     
-    def _classify_official_alert(self, alert: Dict[str, Any]) -> Dict[str, Any]:
+    def _classify_official_alert(self, alert: Any) -> Dict[str, Any]:
         """Classify official alert"""
+        if hasattr(alert, "model_dump"):
+            alert_dict = alert.model_dump()
+        elif hasattr(alert, "dict"):
+            alert_dict = alert.dict()
+        elif isinstance(alert, dict):
+            alert_dict = alert
+        else:
+            alert_dict = getattr(alert, "__dict__", {})
         
         return {
-            "alert_id": alert.get("id", "unknown"),
-            "event": alert.get("event", "unknown"),
-            "severity": alert.get("severity", "unknown"),
-            "certainty": alert.get("certainty", "unknown"),
-            "urgency": alert.get("urgency", "unknown"),
-            "has_polygon": "polygon" in alert or "geocode" in alert,
-            "polygon_area_km2": alert.get("polygon_area_km2"),
-            "languages": alert.get("languages", ["en"]),
-            "is_contradictory": self._check_contradiction(alert),
-            "deadman_switch_eligible": self._check_deadman_eligibility(alert)
+            "alert_id": alert_dict.get("alert_id") or alert_dict.get("id", "unknown"),
+            "event": alert_dict.get("event_type") or alert_dict.get("event", "unknown"),
+            "severity": alert_dict.get("severity", "unknown"),
+            "certainty": alert_dict.get("certainty", "unknown"),
+            "urgency": alert_dict.get("urgency", "unknown"),
+            "has_polygon": "polygon" in alert_dict or "geocode" in alert_dict,
+            "polygon_area_km2": alert_dict.get("polygon_area_km2"),
+            "languages": alert_dict.get("languages", ["en"]),
+            "is_contradictory": self._check_contradiction(alert_dict),
+            "deadman_switch_eligible": self._check_deadman_eligibility(alert_dict)
         }
     
     def _check_contradiction(self, alert: Dict[str, Any]) -> bool:

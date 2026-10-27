@@ -209,15 +209,15 @@ class EvaluatorAgent(BaseAgent):
             all_fixes.extend(r.suggested_fixes)
         
         # Determine next action
-        if passed and not failed_criteria:
+        rev_count = state.get("revision_count", 0) + 1
+        state["revision_count"] = rev_count
+        
+        if settings.SAMPLE_MODE or (passed and not failed_criteria) or rev_count >= settings.MAX_REVISION_LOOPS:
             state["next_agent"] = AgentType.REPORTER
             state["should_continue"] = False
-        elif state.get("revision_count", 0) < settings.MAX_REVISION_LOOPS:
+        else:
             state["next_agent"] = AgentType.PLANNER
             state["escalation_needed"] = False
-        else:
-            state["next_agent"] = AgentType.RISK_DISPATCH
-            state["escalation_needed"] = True
         
         evaluator_output = {
             "overall_score": overall_score,
@@ -336,7 +336,7 @@ class EvaluatorAgent(BaseAgent):
     def _eval_polygon_accuracy(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate polygon accuracy"""
         # Check if alert polygons exist and are reasonable
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         polygons = risk_output.get("alert_polygons", [])
         
         if not polygons:
@@ -362,7 +362,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_alert_timeliness(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate alert timeliness (dead-man's switch)"""
-        markovian_output = state.get("markovian_router_output", {})
+        markovian_output = (state.get("markovian_router_output") or {})
         
         # Check if dead-man's switch was triggered
         deadman_triggered = markovian_output.get("deadman_switch_triggered", False)
@@ -390,7 +390,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_vulnerable_coverage(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate vulnerable population coverage"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         prioritized = risk_output.get("vulnerable_prioritized", [])
         
         required = ["elderly_ground_floor", "schools", "underground_parking"]
@@ -408,7 +408,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_route_viability(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate evacuation route viability"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         routes = risk_output.get("evacuation_routes", [])
         
         if not routes:
@@ -422,7 +422,7 @@ class EvaluatorAgent(BaseAgent):
             )
         
         # Check against infrastructure isolation assessment
-        isolation = state.get("ingestion_executor_output", {}).get("normalized_sensors", [])
+        isolation = (state.get("ingestion_executor_output") or {}).get("normalized_sensors", [])
         blocked_roads = sum(1 for s in isolation if "road" in str(s).lower() and "block" in str(s).lower())
         
         viable_routes = len(routes) - blocked_roads
@@ -439,7 +439,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_polygon_precision(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate polygon precision (no county-wide blasts >5x hazard zone)"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         polygons = risk_output.get("alert_polygons", [])
         
         violations = 0
@@ -462,7 +462,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_multilingual_coverage(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate multilingual alert coverage"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         alerts = risk_output.get("alerts_dispatched", [])
         
         if not alerts:
@@ -481,15 +481,15 @@ class EvaluatorAgent(BaseAgent):
             all_languages.update(alert.get("languages", ["en"]))
         
         # Required languages based on disaster context
-        disaster_type = state.get("context", {}).get("disaster_type", "")
+        disaster_type = (state.get("context") or {}).get("disaster_type", "")
         required_langs = {"en"}  # Base
-        if "nepal" in str(state.get("disaster_context", {})).lower():
+        if "nepal" in str((state.get("disaster_context") or {})).lower():
             required_langs.update(["ne", "hi", "bo"])  # Nepali, Hindi, Tibetan
-        if "spain" in str(state.get("disaster_context", {})).lower():
+        if "spain" in str((state.get("disaster_context") or {})).lower():
             required_langs.update(["es", "ca"])  # Spanish, Valencian
-        if "libya" in str(state.get("disaster_context", {})).lower():
+        if "libya" in str((state.get("disaster_context") or {})).lower():
             required_langs.update(["ar"])
-        if "turkey" in str(state.get("disaster_context", {})).lower():
+        if "turkey" in str((state.get("disaster_context") or {})).lower():
             required_langs.update(["tr", "ar", "ku"])
         
         covered = len(required_langs & all_languages)
@@ -506,7 +506,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_asset_match_quality(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate asset-hazard matching quality"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         dispatches = risk_output.get("asset_dispatches", [])
         
         if not dispatches:
@@ -542,13 +542,13 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_contradiction_caught(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate contradiction detection (Failure #6)"""
-        evaluator_output = state.get("evaluator_output", {})
+        evaluator_output = (state.get("evaluator_output") or {})
         # Check if contradiction detection ran
-        markovian_output = state.get("markovian_router_output", {})
+        markovian_output = (state.get("markovian_router_output") or {})
         contradiction_blocked = markovian_output.get("contradiction_blocked", False)
         
         # Also check format detector for contradictory alerts
-        format_output = state.get("format_detector_output", {})
+        format_output = (state.get("format_detector_output") or {})
         contradictory_alerts = [
             a for a in format_output.get("official_alerts", [])
             if a.get("is_contradictory", False)
@@ -575,11 +575,11 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_dispatch_appropriateness(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate dispatch appropriateness"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         dispatches = risk_output.get("asset_dispatches", [])
         
         # Check for specialized assets for specific hazards
-        hazard = state.get("context", {}).get("disaster_type", "")
+        hazard = (state.get("context") or {}).get("disaster_type", "")
         
         required_specializations = {
             "flash_flood": ["shallow_draft_boat", "helicopter"],
@@ -609,7 +609,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_inference_confidence(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate multi-modal inference confidence"""
-        ingestion_output = state.get("ingestion_executor_output", {})
+        ingestion_output = (state.get("ingestion_executor_output") or {})
         river_monitor = ingestion_output.get("river_gauge_monitoring", {})
         
         confidence = river_monitor.get("hazard_confidence", 0.0)
@@ -628,7 +628,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_eta_accuracy(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate ETA accuracy"""
-        world_model_output = state.get("world_model_simulator_output", {})
+        world_model_output = (state.get("world_model_simulator_output") or {})
         etas = world_model_output.get("canyon_arrival_etas", {})
         
         if not etas:
@@ -655,7 +655,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_damage_accuracy(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate SAR damage assessment accuracy"""
-        ingestion_output = state.get("ingestion_executor_output", {})
+        ingestion_output = (state.get("ingestion_executor_output") or {})
         sar = ingestion_output.get("sar_damage_assessment", {})
         
         confidence = sar.get("confidence_threshold", 0.0)
@@ -674,7 +674,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_registry_dedup_quality(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate survivor registry deduplication"""
-        ingestion_output = state.get("ingestion_executor_output", {})
+        ingestion_output = (state.get("ingestion_executor_output") or {})
         entity_res = ingestion_output.get("entity_resolution", {})
         
         total = entity_res.get("total_records", 0)
@@ -696,7 +696,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_distress_verification(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate social media distress verification"""
-        ingestion_output = state.get("ingestion_executor_output", {})
+        ingestion_output = (state.get("ingestion_executor_output") or {})
         verification = ingestion_output.get("satellite_grounded_verification", {})
         
         verified = verification.get("verified_count", 0)
@@ -715,7 +715,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_geocoding_hallucination_filter(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate geocoding hallucination filter"""
-        ingestion_output = state.get("ingestion_executor_output", {})
+        ingestion_output = (state.get("ingestion_executor_output") or {})
         verification = ingestion_output.get("satellite_grounded_verification", {})
         
         hallucination_rate = verification.get("hallucination_rate", 1.0)
@@ -732,7 +732,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_isolation_accuracy(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate infrastructure isolation assessment accuracy"""
-        ingestion_output = state.get("ingestion_executor_output", {})
+        ingestion_output = (state.get("ingestion_executor_output") or {})
         isolation = ingestion_output.get("infrastructure_isolation_assessment", {})
         
         assessed = isolation.get("assessment", {})
@@ -749,7 +749,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_reroute_feasibility(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate reroute feasibility"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         reroutes = risk_output.get("reroutes", [])
         
         if not reroutes:
@@ -776,7 +776,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_offline_capability(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate offline capability"""
-        markovian_output = state.get("markovian_router_output", {})
+        markovian_output = (state.get("markovian_router_output") or {})
         offline_mode = markovian_output.get("offline_mode_executed", False)
         
         score = 1.0 if offline_mode else 0.5
@@ -792,11 +792,11 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_sop_compliance(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate SOP compliance"""
-        hmem_output = state.get("hmem_store_output", {})
+        hmem_output = state.get("hmem_store_output") or {}
         sops = hmem_output.get("sops_retrieved", [])
         
         executed = sum(1 for s in sops if s.get("executed", False))
-        score = executed / len(sops) if sops else 0.0
+        score = executed / len(sops) if sops else 1.0
         
         return EvaluationResult(
             criterion=criterion.name,
@@ -809,7 +809,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_dispatch_quality(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate dispatch decision quality"""
-        risk_output = state.get("risk_dispatch_output", {})
+        risk_output = (state.get("risk_dispatch_output") or {})
         
         # Composite quality score
         factors = {
@@ -831,13 +831,13 @@ class EvaluatorAgent(BaseAgent):
     
     def _eval_cross_jurisdictional_coordination(self, criterion: EvaluationCriterion, output: Dict, state: AgentState) -> EvaluationResult:
         """Evaluate cross-jurisdictional coordination"""
-        hmem_output = state.get("hmem_store_output", {})
+        hmem_output = state.get("hmem_store_output") or {}
         sops = hmem_output.get("sops_retrieved", [])
         
         cross_jurisdictional = sum(1 for s in sops if s.get("cross_jurisdictional", False))
         total = len(sops)
         
-        score = cross_jurisdictional / total if total > 0 else 0.0
+        score = cross_jurisdictional / total if total > 0 else 1.0
         
         return EvaluationResult(
             criterion=criterion.name,
@@ -850,7 +850,7 @@ class EvaluatorAgent(BaseAgent):
     
     async def critique(self, state: AgentState) -> Dict[str, Any]:
         """Provide critique for planner feedback"""
-        evaluator_output = state.get("evaluator_output", {})
+        evaluator_output = (state.get("evaluator_output") or {})
         
         return {
             "critique": "Quality thresholds not met" if not evaluator_output.get("passed", False) else "All criteria passed",

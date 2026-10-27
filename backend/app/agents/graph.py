@@ -164,7 +164,7 @@ def route_after_evaluator(state: AgentState) -> Literal["planner", "risk_dispatc
     """Route after evaluator based on quality scores"""
     
     # Check if evaluation passed
-    evaluator_output = state.get("evaluator_output", {})
+    evaluator_output = state.get("evaluator_output") or {}
     passed = evaluator_output.get("passed", False)
     
     if passed:
@@ -173,12 +173,12 @@ def route_after_evaluator(state: AgentState) -> Literal["planner", "risk_dispatc
     # Check revision count
     revision_count = state.get("revision_count", 0)
     if revision_count < settings.MAX_REVISION_LOOPS:
-        # Go back to planner for revision
+        state["revision_count"] = revision_count + 1
         return "planner"
     
-    # Max revisions reached - escalate to risk dispatch
+    # Max revisions reached - proceed to reporter with escalation flag
     state["escalation_needed"] = True
-    return "risk_dispatch"
+    return "reporter"
 
 
 def route_after_reporter(state: AgentState) -> Literal["end"]:

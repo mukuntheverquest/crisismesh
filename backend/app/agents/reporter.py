@@ -37,7 +37,7 @@ class ReporterAgent(BaseAgent):
         # Create final output
         final_output = {
             "report": report,
-            "provenance": state.get("provenance", {}),
+            "provenance": (state.get("provenance") or {}),
             "quality_summary": self._generate_quality_summary(state),
             "execution_summary": self._generate_execution_summary(state),
             "recommendations": self._generate_recommendations(state),
@@ -55,8 +55,8 @@ class ReporterAgent(BaseAgent):
     def _build_report(self, state: AgentState, agent_outputs: Dict) -> Dict[str, Any]:
         """Build comprehensive disaster response report"""
         
-        disaster_type = state.get("context", {}).get("disaster_type", "unknown")
-        severity = state.get("context", {}).get("severity", "unknown")
+        disaster_type = (state.get("context") or {}).get("disaster_type", "unknown")
+        severity = (state.get("context") or {}).get("severity", "unknown")
         job_id = state.get("job_id", "")
         
         report = {
@@ -73,7 +73,7 @@ class ReporterAgent(BaseAgent):
             "cross_jurisdictional_coordination": self._summarize_coordination(agent_outputs),
             "lessons_learned": self._extract_lessons_learned(agent_outputs),
             "appendices": {
-                "agent_trace": state.get("provenance", {}).get("agent_trace", {}),
+                "agent_trace": (state.get("provenance") or {}).get("agent_trace", {}),
                 "task_graph": state.get("task_graph").model_dump() if state.get("task_graph") else None,
                 "revision_history": state.get("revision_count", 0)
             }
@@ -84,8 +84,8 @@ class ReporterAgent(BaseAgent):
     def _generate_executive_summary(self, state: AgentState, agent_outputs: Dict) -> str:
         """Generate executive summary"""
         
-        disaster_type = state.get("context", {}).get("disaster_type", "unknown").replace("_", " ").title()
-        severity = state.get("context", {}).get("severity", "unknown").upper()
+        disaster_type = (state.get("context") or {}).get("disaster_type", "unknown").replace("_", " ").title()
+        severity = (state.get("context") or {}).get("severity", "unknown").upper()
         
         alerts_dispatched = 0
         risk_output = agent_outputs.get("risk_dispatch", {})
@@ -127,7 +127,7 @@ class ReporterAgent(BaseAgent):
             },
             "polygon_management": {
                 "auto_expanded": True,
-                "expansion_factor": risk_output.get("expansion_factor", 1.5),
+                "expansion_factor": risk.get("expansion_factor", 1.5),
                 "bounding_box_check": "enforced",
                 "county_wide_blasts_prevented": True
             },
@@ -247,7 +247,7 @@ class ReporterAgent(BaseAgent):
     def _generate_quality_summary(self, state: AgentState) -> Dict[str, Any]:
         """Generate quality summary"""
         
-        evaluator_output = state.get("evaluator_output", {})
+        evaluator_output = (state.get("evaluator_output") or {})
         
         return {
             "overall_score": evaluator_output.get("overall_score", 0.0),
@@ -265,8 +265,8 @@ class ReporterAgent(BaseAgent):
             "job_id": state.get("job_id"),
             "trace_id": state.get("trace_id"),
             "total_duration_seconds": 0,  # Would calculate from timestamps
-            "agents_executed": len(state.get("provenance", {}).get("agent_trace", {})),
-            "tasks_completed": sum(1 for t in state.get("task_graph", {}).nodes.values() if t.status == "completed") if state.get("task_graph") else 0,
+            "agents_executed": len((state.get("provenance") or {}).get("agent_trace", {})),
+            "tasks_completed": sum(1 for t in (state.get("task_graph") or {}).nodes.values() if t.status == "completed") if state.get("task_graph") else 0,
             "errors": len(state.get("errors", [])),
             "escalations": 1 if state.get("escalation_needed") else 0
         }
@@ -276,16 +276,16 @@ class ReporterAgent(BaseAgent):
         
         recommendations = []
         
-        evaluator_output = state.get("evaluator_output", {})
+        evaluator_output = (state.get("evaluator_output") or {})
         if not evaluator_output.get("passed", False):
             for criterion in evaluator_output.get("failed_criteria", []):
                 recommendations.append(f"Improve {criterion} - consider additional training data or model tuning")
         
-        markovian = state.get("markovian_router_output", {})
+        markovian = (state.get("markovian_router_output") or {})
         if markovian.get("deadman_switch_triggered"):
             recommendations.append("Review supervisor notification system - reduce response time below 180s")
         
-        hmem = state.get("hmem_store_output", {})
+        hmem = (state.get("hmem_store_output") or {})
         if hmem.get("cross_jurisdictional_count", 0) == 0:
             recommendations.append("Negotiate additional cross-jurisdictional SOPs for current hazard types")
         
