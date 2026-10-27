@@ -13,3 +13,4 @@ __pycache__/
 *.dylib
 *.mp4
 assets/
+*.bak

@@ -1,8 +1,24 @@
 # CrisisMesh - Disaster Management Multi-Agent System
 
-**Open Agent Hackathon 2026 - Track 1: Solving Fragmented Intelligence**
+**Open Agent Hackathon 2026**
+- 🌐 **Track 1:** Solving Fragmented Intelligence
+- 🔍 **Track 2:** The Agent That Can Explain Why — *(See [EXPLAINABILITY.md](EXPLAINABILITY.md) for full causal provenance documentation)*
 
-CrisisMesh is a multi-agent disaster management system that addresses 10 real-world disaster failure archetypes through autonomous agent orchestration, sponsor technology integration, and offline-capable execution.
+CrisisMesh is an autonomous multi-agent disaster management system that addresses 10 real-world disaster failure archetypes through explainable agent orchestration, sponsor technology integration, and offline-capable execution.
+
+---
+
+### 🔍 Track 2 Highlight: Why Explainability Matters in Disaster Response
+In life-and-death emergency operations, black-box AI recommendations cannot be trusted. CrisisMesh provides:
+1. **Explainable Overrides:** Full causal rationale when the 180s Dead-Man Switch bypasses unresponsive supervisors.
+2. **Contradiction Resolution:** Explains why conflicting official orders (e.g. curfew during dam breaches) are overridden.
+3. **Capability Matching Rationale:** Mathematically explains why specific rescue assets (e.g. shallow-draft boats vs trucks) were selected.
+4. **10-Point Evaluator Critique Gate:** Evaluates plans and provides detailed rejection reasons before any alert is broadcast.
+5. **Causal Provenance Audit Reports:** Delivered by the `ReporterAgent` with full Meterless distributed trace telemetry.
+
+*👉 Read the full [CrisisMesh Explainability Manifesto (EXPLAINABILITY.md)](EXPLAINABILITY.md).*
+
+---
 
 ## 🎯 Problem: Fragmented Intelligence in Disaster Response
 
