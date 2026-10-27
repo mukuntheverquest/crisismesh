@@ -62,12 +62,20 @@ export function MapView() {
   
   useEffect(() => {
     if (mapRef.current) {
-      const map = mapRef.current.leafletElement
-      map.on('moveend', () => {
-        const center = map.getCenter()
-        setMapCenter([center.lat, center.lng])
-        setZoom(map.getZoom())
-      })
+      const map = mapRef.current.leafletElement || mapRef.current
+      if (map && typeof map.on === 'function') {
+        const handleMoveEnd = () => {
+          const center = map.getCenter()
+          if (center) {
+            setMapCenter([center.lat, center.lng])
+            setZoom(map.getZoom())
+          }
+        }
+        map.on('moveend', handleMoveEnd)
+        return () => {
+          map.off('moveend', handleMoveEnd)
+        }
+      }
     }
   }, [mapRef.current])
 

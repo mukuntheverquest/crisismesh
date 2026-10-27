@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: '',
   timeout: 300000, // 5 minutes for long-running agent pipelines
   headers: {
     'Content-Type': 'application/json',

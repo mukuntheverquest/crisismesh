@@ -255,7 +255,8 @@ class FormatDetectorAgent(BaseAgent):
         return min(score, 1.0)
     
     def _classify_official_alert(self, alert: Any) -> Dict[str, Any]:
-        """Classify official alert"""
+        """Classify official alert - handle Pydantic models and dicts"""
+        # Convert to dict properly
         if hasattr(alert, "model_dump"):
             alert_dict = alert.model_dump()
         elif hasattr(alert, "dict"):
@@ -263,7 +264,11 @@ class FormatDetectorAgent(BaseAgent):
         elif isinstance(alert, dict):
             alert_dict = alert
         else:
-            alert_dict = getattr(alert, "__dict__", {})
+            # Fallback: try to extract attributes
+            alert_dict = {}
+            for attr in ["alert_id", "id", "event_type", "event", "severity", "certainty", "urgency", "polygon", "geocode", "polygon_area_km2", "languages"]:
+                if hasattr(alert, attr):
+                    alert_dict[attr] = getattr(alert, attr)
         
         return {
             "alert_id": alert_dict.get("alert_id") or alert_dict.get("id", "unknown"),
