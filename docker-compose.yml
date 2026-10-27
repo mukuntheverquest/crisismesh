@@ -1,0 +1,222 @@
+# CrisisMesh - Disaster Management Multi-Agent System
+# docker-compose.yml for local development
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: crisismesh-postgres
+    environment:
+      POSTGRES_DB: crisismesh
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crisismesh"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crisismesh-network
+
+  # Redis for caching and pub/sub
+  redis:
+    image: redis:7-alpine
+    container_name: crisismesh-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - crisismesh-network
+
+  # Zetaris Local (mock for development)
+  zetaris:
+    image: zetaris/zetaris-local:latest
+    container_name: crisismesh-zetaris
+    environment:
+      ZETARIS_API_KEY: ${ZETARIS_API_KEY:-dev_key}
+      ZETARIS_ORG_ID: ${ZETARIS_ORG_ID:-dev_org}
+    ports:
+      - "8080:8080"
+    volumes:
+      - zetaris_data:/var/lib/zetaris
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Meterless Collector
+  meterless-collector:
+    image: meterless/collector:latest
+    container_name: crisismesh-meterless
+    environment:
+      METERLESS_API_KEY: ${METERLESS_API_KEY:-dev_key}
+      METERLESS_PROJECT_ID: ${METERLESS_PROJECT_ID:-dev_project}
+      METERLESS_ENVIRONMENT: development
+    ports:
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+      - "8888:8888"  # Prometheus metrics
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Grafana for Meterless dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: crisismesh-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./backend/app/observability:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: crisismesh-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./backend/app/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Loki for logs
+  loki:
+    image: grafana/loki:latest
+    container_name: crisismesh-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./backend/app/observability/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: crisismesh-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    volumes:
+      - jaeger_data:/var/lib/jaeger
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Ollama for local LLM (optional)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: crisismesh-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - crisismesh-network
+    profiles:
+      - full
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crisismesh-backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/crisismesh
+      - REDIS_URL=redis://redis:6379/0
+      - ZETARIS_URL=http://zetaris:8080
+      - METERLESS_API_URL=http://meterless-collector:4318
+      - NVIDIA_VISIBLE_DEVICES=0
+      - SAMPLE_MODE=true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - crisismesh-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: crisismesh-frontend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      - VITE_WS_URL=ws://localhost:8000/ws
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - crisismesh-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  zetaris_data:
+  grafana_data:
+  prometheus_data:
+  loki_data:
+  jaeger_data:
+  ollama_data:
+
+networks:
+  crisismesh-network:
+    driver: bridge

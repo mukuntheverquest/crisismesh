@@ -1,0 +1,93 @@
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { LayoutDashboard, FlaskConical, MapPin, History, AlertTriangle } from 'lucide-react'
+import { clsx } from 'clsx'
+
+export function Layout() {
+  const location = useLocation()
+  
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/scenarios', label: 'Scenarios', icon: FlaskConical },
+    { path: '/map', label: 'Map View', icon: MapPin },
+    { path: '/history', label: 'History', icon: History },
+  ]
+  
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Sidebar */}
+      <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 z-40">
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="p-6 border-b border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-crisis-600 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900">CrisisMesh</h1>
+                <p className="text-xs text-slate-500">Disaster Response System</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-1">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path
+              const Icon = item.icon
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={clsx(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-crisis-50 text-crisis-700'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  {item.label}
+                </NavLink>
+              )
+            })}
+          </nav>
+          
+          {/* Status */}
+          <div className="p-4 border-t border-slate-200">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="w-2 h-2 bg-safe-500 rounded-full" />
+              <span>System Operational</span>
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              SAMPLE_MODE: Active
+            </div>
+          </div>
+        </div>
+      </aside>
+      
+      {/* Main Content */}
+      <main className="ml-64 min-h-screen">
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-200">
+          <div className="px-6 py-4">
+            <h2 className="text-2xl font-bold text-slate-900">{getPageTitle(location.pathname)}</h2>
+          </div>
+        </header>
+        
+        <div className="p-6">
+          <Outlet />
+        </div>
+      </main>
+    </div>
+  )
+}
+
+function getPageTitle(pathname: string): string {
+  switch (pathname) {
+    case '/': return 'Dashboard'
+    case '/scenarios': return 'Disaster Scenarios'
+    case '/map': return 'Map View'
+    case '/history': return 'Response History'
+    default: return 'CrisisMesh'
+  }
+}

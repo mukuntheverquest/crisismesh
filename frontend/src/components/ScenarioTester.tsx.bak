@@ -1,0 +1,373 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { 
+  Play, 
+  Loader2, 
+  CheckCircle, 
+  XCircle,
+  ChevronLeft,
+} from 'lucide-react'
+import api from '../lib/api'
+import { getSeverityColor } from '../lib/utils'
+
+interface Scenario {
+  id: string
+  name: string
+  disaster_type: string
+  severity: string
+  failure_archetype: string
+  description: string
+  test_data: {
+    sensor_readings?: any[]
+    social_media_posts?: any[]
+    official_alerts?: any[]
+  }
+  expected_outcome: string
+}
+
+interface Job {
+  job_id: string
+  status: string
+  started_at: string
+  completed_at?: string
+  trace_id?: string
+}
+
+const SCENARIOS: Scenario[] = [
+  {
+    id: 'texas_flash_flood_2025',
+    name: 'Central Texas Flash Flood (July 2025)',
+    disaster_type: 'flash_flood',
+    severity: 'critical',
+    failure_archetype: 'Sleeping Supervisor & Manual Approval Bottleneck',
+    description: 'Over 12 inches of overnight rain sent a 29-34 ft flood wall down the Guadalupe River. NWS issued warning at 1:14 AM but opt-in alert wasn\'t sent until 5:02 AM - nearly 4 hours later. Dispatcher refused to send Code Red without supervisor approval.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'gauge_guadalupe_1', sensor_type: 'river_gauge', location: [-99.5, 30.0], timestamp: '2025-07-04T01:14:00Z', value: 34.2, unit: 'ft', quality_flag: 'good' },
+        { sensor_id: 'gauge_guadalupe_2', sensor_type: 'river_gauge', location: [-99.3, 30.1], timestamp: '2025-07-04T04:00:00Z', value: 29.8, unit: 'ft', quality_flag: 'good' }
+      ],
+      official_alerts: [
+        { id: 'nws_warning_1', type: 'flash_flood_warning', issued_at: '2025-07-04T01:14:00Z', polygon: [[-99.7,30.1],[-99.2,30.1],[-99.2,29.9],[-99.7,29.9]], severity: 'critical' }
+      ]
+    },
+    expected_outcome: 'Autonomous 180-second dead-man switch triggers evacuation alert bypassing manual supervisor sign-off'
+  },
+  {
+    id: 'la_wildfires_2025',
+    name: 'Los Angeles Wildfires (January 2025)',
+    disaster_type: 'wildfire',
+    severity: 'critical',
+    failure_archetype: 'Polygon Target Miss & Single-Operator Overload',
+    description: 'Only one OEM operator manually issuing alerts across three simultaneous wildfires. Zero electronic alerts to West Altadena (17 of 18 Eaton Fire deaths) until 3:30-6:00 AM. Conversely, Jan 9 Kenneth Fire warning sent to all 10M LA County residents without bounding polygon.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'wind_station_1', sensor_type: 'weather_station', location: [-118.3, 34.2], timestamp: '2025-01-08T00:00:00Z', value: 45, unit: 'mph', quality_flag: 'good' },
+        { sensor_id: 'fire_perimeter_1', sensor_type: 'satellite', location: [-118.2, 34.1], timestamp: '2025-01-08T03:30:00Z', value: 500, unit: 'acres', quality_flag: 'good' }
+      ],
+      official_alerts: [
+        { id: 'la_alert_1', type: 'evacuation_warning', issued_at: '2025-01-08T03:30:00Z', polygon: [[-118.4,34.2],[-118.1,34.2],[-118.1,34.0],[-118.4,34.0]], severity: 'critical' }
+      ]
+    },
+    expected_outcome: 'Deterministic polygon guardrail blocks unbounded county-wide blasts; world model auto-expands evacuation polygons downwind'
+  },
+  {
+    id: 'valencia_dana_2024',
+    name: 'Valencia DANA Flash Flood (October 2024)',
+    disaster_type: 'flash_flood',
+    severity: 'catastrophic',
+    failure_archetype: 'Forecast-to-Governance Disconnect & Jurisdictional Stand-Down',
+    description: 'AEMET issued Red Alert early Oct 29, but regional government didn\'t send ES-Alert mobile broadcast until 20:11 (8:11 PM) when 200,000 residents already inundated. UME stationed in affected towns unable to act due to regional-national jurisdictional mandate gap.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'poyo_gauge', sensor_type: 'river_gauge', location: [-0.5, 39.5], timestamp: '2024-10-29T08:00:00Z', value: 12.5, unit: 'm', quality_flag: 'good' },
+        { sensor_id: 'rain_station_1', sensor_type: 'weather_station', location: [-0.3, 39.6], timestamp: '2024-10-29T06:00:00Z', value: 490, unit: 'mm', quality_flag: 'good' }
+      ],
+      official_alerts: [
+        { id: 'aemet_red', type: 'red_alert', issued_at: '2024-10-29T07:00:00Z', polygon: [[-0.7,39.6],[-0.2,39.6],[-0.2,39.4],[-0.7,39.4]], severity: 'catastrophic' }
+      ]
+    },
+    expected_outcome: 'Pre-authorized cross-jurisdictional SOP engine auto-generates joint mobilization orders from verified Red Alert'
+  },
+  {
+    id: 'nepal_avalanche_2026',
+    name: 'Nepal Bhote Koshi Rock-Ice Avalanche (August 2026)',
+    disaster_type: 'rock_ice_avalanche',
+    severity: 'catastrophic',
+    failure_archetype: 'Sensor Destruction & Single-Modality Blindness',
+    description: '5,200m Langtang rock-ice collapse sent 160 km/h debris surge. Border and Syabrubesi river gauges destroyed within 7 minutes. DHM relied on monsoon water-level thresholds, only learned of flood via phone call. 9:35 AM SMS arrived alongside floodwater.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'border_gauge', sensor_type: 'river_gauge', location: [85.8, 27.9], timestamp: '2026-08-26T09:28:00Z', value: 0, unit: 'm', quality_flag: 'missing' },
+        { sensor_id: 'syabrubesi_gauge', sensor_type: 'river_gauge', location: [85.6, 28.0], timestamp: '2026-08-26T09:29:00Z', value: 0, unit: 'm', quality_flag: 'missing' },
+        { sensor_id: 'seismic_1', sensor_type: 'seismic', location: [85.9, 27.8], timestamp: '2026-08-26T09:25:00Z', value: 4.2, unit: 'richter', quality_flag: 'good' }
+      ],
+      social_media_posts: [
+        { post_id: 'call_1', platform: 'phone', author: 'upstream_observer', content: 'Massive debris flow coming down Bhote Koshi!', timestamp: '2026-08-26T09:30:00Z', language: 'ne' }
+      ]
+    },
+    expected_outcome: 'Multi-modal telemetry loss inference treats correlated sensor drop-off + seismic tremor + observer calls as high-confidence hazard signal, calculates 160 km/h canyon arrival ETAs'
+  },
+  {
+    id: 'nepal_floods_2024',
+    name: 'Nepal Multi-Agency Registry Divergence (August 2024)',
+    disaster_type: 'flash_flood',
+    severity: 'high',
+    failure_archetype: 'Manual PDF-to-CSV Nightmares & Multi-Agency Registry Divergence',
+    description: 'Ministries launched competing portals (Setu Rapid, BIPAD Portal, PMO) with three incompatible rescued figures: 13,013 bulletin vs 4,898 public API vs 7,514 internal log. Developer manually converted Nepali Army PDFs to CSVs to cross-check missing persons.',
+    test_data: {
+      sensor_readings: [],
+      social_media_posts: [],
+      official_alerts: []
+    },
+    expected_outcome: 'Automated multi-format ingestion parses Army/NDRRMA PDFs and Copernicus XLSX into Zetaris in <15s, CUDA sentence-transformers deduplicate survivor registries with full provenance'
+  },
+  {
+    id: 'libya_derna_2023',
+    name: 'Derna Dam Collapse / Storm Daniel (September 2023)',
+    disaster_type: 'dam_failure',
+    severity: 'catastrophic',
+    failure_archetype: 'Contradictory Official Messaging & Lethal Curfew Traps',
+    description: 'Despite 72-hour WMO warnings and 2022 hydrology study, authorities imposed stay-at-home curfew Sept 10. At 1:12 AM Sept 11, Water Ministry reassured dams in "good condition" - then at 2:59 AM ordered evacuation 19 minutes after both dams collapsed (2:40 & 2:50 AM). 4,352+ dead, 8,000 missing.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'dam_wadi_1', sensor_type: 'river_gauge', location: [22.6, 32.8], timestamp: '2023-09-11T02:40:00Z', value: 0, unit: 'm', quality_flag: 'bad' },
+        { sensor_id: 'dam_wadi_2', sensor_type: 'river_gauge', location: [22.5, 32.7], timestamp: '2023-09-11T02:50:00Z', value: 0, unit: 'm', quality_flag: 'bad' }
+      ],
+      official_alerts: [
+        { id: 'curfew_1', type: 'curfew', issued_at: '2023-09-10T20:00:00Z', polygon: [[22.4,32.7],[22.7,32.7],[22.7,32.9],[22.4,32.9]], severity: 'emergency' },
+        { id: 'reassurance_1', type: 'all_clear', issued_at: '2023-09-11T01:12:00Z', polygon: [[22.4,32.7],[22.7,32.7],[22.7,32.9],[22.4,32.9]], severity: 'advisory' }
+      ]
+    },
+    expected_outcome: 'Contradiction detection blocks curfew/shelter-in-place inside dam-breach polygon, enforces high-ground evacuation routing'
+  },
+  {
+    id: 'nepal_floods_2026_multilingual',
+    name: 'Nepal Floods Multilingual Alert Failure (August 2026)',
+    disaster_type: 'flash_flood',
+    severity: 'high',
+    failure_archetype: 'Unilingual Generic Boilerplate Alerts Ignoring Tourists & Minorities',
+    description: 'Flood SMS only in Nepali along major international trekking route where 636 foreign nationals from 39 countries went missing. Generic boilerplate "remain in safe location" with no arrival time or shelter coordinates. Valencia had 100K foreign residents; Türkiye missed Arabic/Kurdish communities.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'gauge_1', sensor_type: 'river_gauge', location: [85.3, 27.7], timestamp: '2026-08-20T06:00:00Z', value: 8.5, unit: 'm', quality_flag: 'good' }
+      ],
+      official_alerts: [
+        { id: 'nepal_sms', type: 'sms_alert', issued_at: '2026-08-20T07:00:00Z', polygon: [[85.0,27.5],[85.6,27.5],[85.6,28.0],[85.0,28.0]], severity: 'warning', languages: ['ne'] }
+      ]
+    },
+    expected_outcome: 'Hyper-localized multilingual synthesizer auto-generates cell-broadcast in Nepali/English/Hindi/Tibetan + Spanish/Valencian + Turkish/Arabic/Kurdish with exact arrival countdowns, shelter GPS, community focal points'
+  },
+  {
+    id: 'hurricane_helene_2024',
+    name: 'Hurricane Helene Telecom/Power Isolation (September 2024)',
+    disaster_type: 'hurricane',
+    severity: 'catastrophic',
+    failure_archetype: 'Total Telecom, Power & Road/Port Isolation (Brain vs Limbs Collapse)',
+    description: 'Helene wiped out commercial cellular across 11 NC counties (>150K isolated) while landslides blocked mountain roads to tower generators. Noto Peninsula earthquake blocked land trucks and relief ships (405 shelters without water/power/internet for 10+ days). Türkiye 12-hour Twitter restriction forced VPNs.',
+    test_data: {
+      sensor_readings: [
+        { sensor_id: 'cell_tower_1', sensor_type: 'weather_station', location: [-82.5, 35.6], timestamp: '2024-09-29T12:00:00Z', value: 0, unit: 'signal', quality_flag: 'missing' },
+        { sensor_id: 'bridge_1', sensor_type: 'road_sensor', location: [-82.3, 35.7], timestamp: '2024-09-29T14:00:00Z', value: 0, unit: 'passable', quality_flag: 'bad' }
+      ],
+      official_alerts: []
+    },
+    expected_outcome: 'Offline-first edge execution (SAMPLE_MODE) + access-viability rerouting cross-checks road landslides/bridge washouts to auto-reroute from ground trucks to heli/drone/shallow-draft boat and low-byte VHF/siren'
+  },
+  {
+    id: 'turkiye_earthquake_2023',
+    name: 'Türkiye-Syria Earthquake Social Media Overload (February 2023)',
+    disaster_type: 'earthquake',
+    severity: 'catastrophic',
+    failure_archetype: 'Unstructured Social Media Distress Overload & Geocoding Hallucinations',
+    description: '1,824,000 tweets in 12 hours overwhelmed manual triage; over half help-keyword tweets were noise. mDeBERTa achieved only 71.13 F1 on street address extraction, ~4% geocoded pins in wrong city. Myanmar 2025 M7.7 quake required Sentinel-1 SAR + AI damage mapping.',
+    test_data: {
+      social_media_posts: [
+        { post_id: 'tweet_1', platform: 'twitter', author: 'user123', content: 'Trapped under rubble at 123 Main St, Antakya! Need help!', timestamp: '2023-02-06T04:30:00Z', language: 'tr', location_mentioned: ['Antakya'], geocoded_location: [36.2, 36.1], urgency_keywords: ['trapped', 'help', 'rubble'] },
+        { post_id: 'tweet_2', platform: 'twitter', author: 'user456', content: 'My family stuck in collapsed building, Hatay province', timestamp: '2023-02-06T04:45:00Z', language: 'tr', location_mentioned: ['Hatay'], geocoded_location: [36.4, 36.2], urgency_keywords: ['stuck', 'collapsed', 'family'] }
+      ],
+      official_alerts: []
+    },
+    expected_outcome: 'Satellite-grounded distress verification extracts [PER, CITY, ADDR, STATUS] via GPU NLP, executes Zetaris spatial join against Sentinel-1 SAR / HOTOSM fAIr damage footprints (confidence >=0.75) to filter wrong-city geocoding hallucinations'
+  },
+  {
+    id: 'nepal_tunnel_2026',
+    name: 'Nepal Hydropower Tunnel Entrapment (August 2026)',
+    disaster_type: 'industrial_accident',
+    severity: 'critical',
+    failure_archetype: 'High-Tech Cloud Dashboards vs Specialized Field Equipment Mismatch',
+    description: '~500 workers trapped in dark, flooded hydropower tunnels (Upper Trishuli-1, Trishuli 3A, Chilime). Nepali Army searched with smartphone flashlights due to lack of subterranean breaching gear and heavy-lift drones (only 4-5 nationwide). Aamachhodingmo RM ran out of food, salt, oil.',
+    test_data: {
+      sensor_readings: [],
+      official_alerts: [
+        { id: 'tunnel_alert', type: 'industrial_accident', issued_at: '2026-08-26T10:00:00Z', polygon: [[85.3,27.9],[85.5,27.9],[85.5,28.1],[85.3,28.1]], severity: 'critical' }
+      ]
+    },
+    expected_outcome: 'Capability-matched asset/NGO dispatch indexes pre-accredited civil, engineering, drone (Robotics Association of Nepal LiDAR/thermal), DMAT, international tunnel-rescue assets in Zetaris, matches exact hazard mechanics to specialized equipment'
+  }
+]
+
+export function ScenarioTester() {
+  const navigate = useNavigate()
+  const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
+  const [loading, setLoading] = useState(false)
+  
+  async function runScenario(scenario: Scenario) {
+    setLoading(true)
+    try {
+      const response = await api.post(`/api/v1/scenarios/${scenario.id}/run`)
+      const job = response.data
+      
+      // Store job
+      const stored = localStorage.getItem('crisismesh_jobs')
+      const jobs: Job[] = stored ? JSON.parse(stored) : []
+      jobs.unshift({
+        job_id: job.job_id,
+        status: job.status,
+        started_at: job.started_at,
+        trace_id: job.trace_id
+      })
+      localStorage.setItem('crisismesh_jobs', JSON.stringify(jobs))
+      
+      navigate(`/jobs/${job.job_id}`)
+    } catch (error) {
+      console.error('Failed to run scenario:', error)
+      alert('Failed to run scenario. Check console for details.')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Disaster Scenarios</h1>
+          <p className="text-slate-500 mt-1">10 verified failure archetypes from recent disasters - test CrisisMesh against real-world failures</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-crisis-500" /> Critical</span>
+          <span className="flex items-center gap-1 ml-4"><span className="w-2 h-2 rounded-full bg-alert-500" /> High</span>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {SCENARIOS.map((scenario) => (
+          <div 
+            key={scenario.id}
+            className={`card p-6 hover:shadow-lg transition-shadow relative overflow-hidden ${selectedScenario?.id === scenario.id ? 'ring-2 ring-crisis-500' : ''}`}
+            onClick={() => setSelectedScenario(scenario)}
+          >
+            <div className="absolute top-0 right-0 w-1 h-full bg-crisis-500" />
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded ${getSeverityColor(scenario.severity)}`}>
+                    {scenario.severity.toUpperCase()}
+                  </span>
+                  <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded">
+                    {scenario.disaster_type.replace('_', ' ').toUpperCase()}
+                  </span>
+                </div>
+                <h3 className="font-semibold text-lg text-slate-900 mb-1">{scenario.name}</h3>
+                <p className="text-sm text-slate-500">{scenario.failure_archetype}</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-slate-600 mb-4 line-clamp-3">{scenario.description}</p>
+            
+            <div className="pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-500 mb-2">Expected Outcome:</p>
+              <p className="text-sm text-slate-700 font-medium">{scenario.expected_outcome}</p>
+            </div>
+            
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  runScenario(scenario)
+                }}
+                disabled={loading}
+                className={`w-full py-2 px-3 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
+                  loading
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-crisis-600 text-white hover:bg-crisis-700'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    Run Scenario
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {selectedScenario && (
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-slate-900">Scenario Details</h2>
+            <button onClick={() => setSelectedScenario(null)} className="text-slate-400 hover:text-slate-600">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-medium text-slate-900 mb-3">Test Data</h3>
+              <div className="space-y-4">
+                {selectedScenario.test_data.sensor_readings && selectedScenario.test_data.sensor_readings.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700 mb-2">Sensor Readings ({selectedScenario.test_data.sensor_readings.length})</h4>
+                    <div className="bg-slate-50 rounded-lg p-3 max-h-64 overflow-auto font-mono text-xs">
+                      <pre>{JSON.stringify(selectedScenario.test_data.sensor_readings, null, 2)}</pre>
+                    </div>
+                  </div>
+                )}
+                {selectedScenario.test_data.social_media_posts && selectedScenario.test_data.social_media_posts.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700 mb-2">Social Media Posts ({selectedScenario.test_data.social_media_posts.length})</h4>
+                    <div className="bg-slate-50 rounded-lg p-3 max-h-64 overflow-auto font-mono text-xs">
+                      <pre>{JSON.stringify(selectedScenario.test_data.social_media_posts, null, 2)}</pre>
+                    </div>
+                  </div>
+                )}
+                {selectedScenario.test_data.official_alerts && selectedScenario.test_data.official_alerts.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700 mb-2">Official Alerts ({selectedScenario.test_data.official_alerts.length})</h4>
+                    <div className="bg-slate-50 rounded-lg p-3 max-h-64 overflow-auto font-mono text-xs">
+                      <pre>{JSON.stringify(selectedScenario.test_data.official_alerts, null, 2)}</pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="font-medium text-slate-900 mb-3">Failure Archetype</h3>
+              <p className="text-slate-600 mb-4">{selectedScenario.failure_archetype}</p>
+              
+              <h3 className="font-medium text-slate-900 mb-3">What CrisisMesh Solves</h3>
+              <p className="text-slate-600 mb-4">{scenario.expected_outcome}</p>
+              
+              <h3 className="font-medium text-slate-900 mb-3">Sponsor Tech Mapping</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="p-2 bg-blue-50 rounded"><span className="font-medium text-blue-700">Zetaris:</span> Data federation, schema registry</div>
+                <div className="p-2 bg-purple-50 rounded"><span className="font-medium text-purple-700">Meterless:</span> H-Mem, Markovian, World Model</div>
+                <div className="p-2 bg-green-50 rounded"><span className="font-medium text-green-700">NVIDIA:</span> GPU embeddings, CUDA acceleration</div>
+                <div className="p-2 bg-orange-50 rounded"><span className="font-medium text-orange-700">Cursor:</span> AI-native dev environment</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
